@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="stylesheet" href="https://ssl.gstatic.com/docs/script/css/add-ons1.css">
+    <script type="text/javascript">
+      var DEVELOPER_KEY = 'YOUR_DEVELOPER_KEY';
+      var DIALOG_DIMENSIONS = {width: 600, height: 425};
+      var pickerApiLoaded = false;
+
+      function loadPickerApi() {
+        gapi.load('picker', {'callback': onPickerApiLoad});
+      }
+
+      function onPickerApiLoad() {
+        pickerApiLoaded = true;
+        document.getElementById('status').innerHTML = 'Picker API loaded';
+        document.getElementById('select-file').disabled = false;
+      }
+
+      function getOAuthToken() {
+        document.getElementById('status').innerHTML = 'Getting OAuth token...';
+        google.script.run
+          .withSuccessHandler(createPicker)
+          .withFailureHandler(showError)
+          .getOAuthToken();
+      }
+
+      function createPicker(token) {
+        if (pickerApiLoaded && token) {
+          document.getElementById('status').innerHTML = 'Creating picker...';
+          var view = new google.picker.View(google.picker.ViewId.DOCS);
+          var uploadView = new google.picker.DocsUploadView();
+          var picker = new google.picker.PickerBuilder()
+            .addView(view)
+            .addView(uploadView)
+            .setOAuthToken(token)
+            .setDeveloperKey(DEVELOPER_KEY)
+            .setCallback(pickerCallback)
+            .setOrigin(google.script.host.origin)
+            .setSize(DIALOG_DIMENSIONS.width - 2, DIALOG_DIMENSIONS.height - 2)
+            .build();
+          picker.setVisible(true);
+        } else {
+          showError('Unable to load the file picker. Picker API loaded: ' + pickerApiLoaded + ', Token received: ' + (token ? 'Yes' : 'No'));
+        }
+      }
+
+      function pickerCallback(data) {
+        if (data[google.picker.Response.ACTION] == google.picker.Action.PICKED) {
+          var doc = data[google.picker.Response.DOCUMENTS][0];
+          var id = doc[google.picker.Document.ID];
+          document.getElementById('status').innerHTML = 'File selected, processing...';
+          google.script.run
+            .withSuccessHandler(closeDialog)
+            .withFailureHandler(showError)
+            .processSelectedFile(id);
+        } else if (data[google.picker.Response.ACTION] == google.picker.Action.CANCEL) {
+          google.script.host.close();
+        }
+      }
+
+      function closeDialog(message) {
+        document.getElementById('status').innerHTML = message || 'Done!';
+        setTimeout(function() {
+          google.script.host.close();
+        }, 2000);
+      }
+
+      function showError(message) {
+        document.getElementById('error').innerHTML = 'Error: ' + message;
+        console.error('Error:', message);
+      }
+
+      window.onload = function() {
+        loadPickerApi();
+      }
+    </script>
+    <script src="https://apis.google.com/js/api.js?onload=loadPickerApi"></script>
+  </head>
+  <body>
+    <div>
+      <button id="select-file" onclick="getOAuthToken()" disabled>Select or Upload a file</button>
+    </div>
+    <div id="status"></div>
+    <div id="error" style="color: red;"></div>
+  </body>
+</html>
